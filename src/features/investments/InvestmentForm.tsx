@@ -1,7 +1,7 @@
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { useCreateInvestment, useUpdateInvestment } from './useInvestments';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import type { Investment } from '@/types';
@@ -23,13 +23,7 @@ type InvestmentFormData = z.infer<typeof investmentSchema>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const INSTRUMENT_TYPES = [
-  'CETES',
-  'Finsus',
-  'SuperTasas',
-  'NU',
-  'Mercado Pago',
-];
+const INSTRUMENT_TYPES = ['CETES', 'Finsus', 'SuperTasas', 'NU', 'Mercado Pago'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -42,6 +36,11 @@ interface InvestmentFormProps {
 export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormProps) {
   const createInvestment = useCreateInvestment();
   const updateInvestment = useUpdateInvestment();
+
+  // Lock monto once any valuation exists — the seed valuation is created on first
+  // save, so from the second open onward the field is read-only. Use
+  // "Actualizar valuaciones" to record the current value going forward.
+  const amountLocked = !!initial && initial.valuaciones.length >= 1;
 
   const {
     register,
@@ -71,7 +70,10 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
     const payload: Omit<Investment, 'id' | 'createdAt' | 'updatedAt'> = {
       nombre: data.nombre,
       tipo: data.tipo,
-      montoInvertido: parseFloat(data.montoInvertido),
+      // Preserve original monto when locked — never overwrite with form value
+      montoInvertido: amountLocked
+        ? initial!.montoInvertido
+        : parseFloat(data.montoInvertido),
       liquidez: data.liquidez,
       notas: data.notas ?? '',
       valuaciones: initial?.valuaciones ?? [],
@@ -106,7 +108,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
         {errors.nombre && <p className={errorClass}>{errors.nombre.message}</p>}
       </div>
 
-      {/* Tipo de instrumento */}
+      {/* Plataforma / Instrumento */}
       <div>
         <label className={labelClass}>Plataforma / Instrumento</label>
         <div className="relative">
@@ -126,7 +128,15 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
 
       {/* Monto invertido */}
       <div>
-        <label className={labelClass}>Monto invertido (MXN)</label>
+        <label className={labelClass}>
+          <span>Monto invertido (MXN)</span>
+          {amountLocked && (
+            <span className="inline-flex items-center gap-1 ml-2 text-[#64748B]">
+              <Lock size={10} />
+              bloqueado
+            </span>
+          )}
+        </label>
         <Controller
           control={control}
           name="montoInvertido"
@@ -135,11 +145,21 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
               value={field.value}
               onChange={field.onChange}
               currency="MXN"
-              hasError={!!errors.montoInvertido}
+              disabled={amountLocked}
+              hasError={!!errors.montoInvertido && !amountLocked}
             />
           )}
         />
-        {errors.montoInvertido && <p className={errorClass}>{errors.montoInvertido.message}</p>}
+        {amountLocked ? (
+          <p className="text-[#64748B] text-xs mt-1 ml-1">
+            Con valuaciones registradas el monto no puede editarse.
+            Usa &ldquo;Actualizar valuaciones&rdquo; para registrar el valor actual.
+          </p>
+        ) : (
+          errors.montoInvertido && (
+            <p className={errorClass}>{errors.montoInvertido.message}</p>
+          )
+        )}
       </div>
 
       {/* Liquidez */}

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { X, Save, Clock, AlertTriangle } from 'lucide-react';
+import { X, Save, AlertTriangle } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { calcMetrics } from './investmentService';
 import { useAddValuation } from './useInvestments';
@@ -22,10 +22,6 @@ function daysSince(investment: Investment): number {
   );
   const ms = Date.now() - sorted[0].fecha.toMillis();
   return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-
-function isStale(days: number): boolean {
-  return days >= 30;
 }
 
 export function BulkValuationModal({ investments, onClose }: BulkValuationModalProps) {
@@ -58,15 +54,10 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
       if (!row.isDirty || row.newValue === '') return false;
       const newVal = parseFloat(row.newValue);
       if (isNaN(newVal) || newVal < 0) return false;
-      const metrics = calcMetrics(inv);
-      // Skip if value hasn't changed
-      return newVal !== metrics.valorActual;
+      return newVal !== calcMetrics(inv).valorActual;
     });
 
-    if (toUpdate.length === 0) {
-      onClose();
-      return;
-    }
+    if (toUpdate.length === 0) { onClose(); return; }
 
     setSaving(true);
     await Promise.all(
@@ -79,8 +70,6 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
     );
     setSaving(false);
     setSavedCount(toUpdate.length);
-
-    // Auto-close after brief confirmation
     setTimeout(onClose, 1500);
   };
 
@@ -97,6 +86,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative w-full sm:max-w-lg bg-[#161F2C] border border-white/5 rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col">
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 flex-shrink-0">
           <div>
@@ -118,7 +108,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
           {investments.map((inv) => {
             const metrics = calcMetrics(inv);
             const days = daysSince(inv);
-            const stale = isStale(days);
+            const isStale = days >= 30;
             const row = rows[inv.id];
 
             return (
@@ -136,7 +126,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
                     <p className="text-sm text-[#F0F4F8] font-medium truncate">
                       {inv.nombre}
                     </p>
-                    {stale && (
+                    {isStale && (
                       <span title={`Sin actualizar hace ${days} días`} className="flex-shrink-0">
                         <AlertTriangle size={12} className="text-[#F5A623]" />
                       </span>
@@ -144,6 +134,16 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs text-[#8899AA]">{inv.tipo}</span>
+                    <span className="text-xs text-[#8899AA]">·</span>
+                    <span
+                      className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
+                        inv.liquidez === 'a_la_vista'
+                          ? 'bg-[#1DB87A]/10 text-[#1DB87A]'
+                          : 'bg-[#A78BFA]/10 text-[#A78BFA]'
+                      }`}
+                    >
+                      {inv.liquidez === 'a_la_vista' ? 'A la vista' : 'Congelada'}
+                    </span>
                     <span className="text-xs text-[#8899AA]">·</span>
                     <span className="text-xs font-medium tabular-nums text-[#F0F4F8]">
                       {fmt(metrics.valorActual)}
@@ -201,6 +201,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

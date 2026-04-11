@@ -16,9 +16,11 @@ import { seedSystemCategories } from '@/features/categories/categoryService';
 
 const googleProvider = new GoogleAuthProvider();
 
-// ─── Create user profile in Firestore ────────────────────────────────────────
+// ─── Get or create user profile ──────────────────────────────────────────────
+// Single function used both at registration and on every auth state change.
+// Ensures the profile always exists in Firestore regardless of auth method.
 
-async function createUserProfile(firebaseUser: FirebaseUser): Promise<User> {
+export async function getOrCreateUserProfile(firebaseUser: FirebaseUser): Promise<User> {
   const ref = doc(db, 'users', firebaseUser.uid);
   const snapshot = await getDoc(ref);
 
@@ -38,20 +40,11 @@ async function createUserProfile(firebaseUser: FirebaseUser): Promise<User> {
   return { uid: firebaseUser.uid, ...snapshot.data() } as User;
 }
 
-// ─── Get user profile ─────────────────────────────────────────────────────────
-
-export async function getUserProfile(uid: string): Promise<User | null> {
-  const ref = doc(db, 'users', uid);
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) return null;
-  return { uid, ...snapshot.data() } as User;
-}
-
 // ─── Email & Password ─────────────────────────────────────────────────────────
 
 export async function loginWithEmail(email: string, password: string) {
   const result = await signInWithEmailAndPassword(auth, email, password);
-  const profile = await getUserProfile(result.user.uid);
+  const profile = await getOrCreateUserProfile(result.user);
   return { user: result.user, profile };
 }
 
@@ -62,7 +55,7 @@ export async function registerWithEmail(
 ) {
   const result = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(result.user, { displayName });
-  const profile = await createUserProfile(result.user);
+  const profile = await getOrCreateUserProfile(result.user);
   return { user: result.user, profile };
 }
 
@@ -70,7 +63,7 @@ export async function registerWithEmail(
 
 export async function loginWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider);
-  const profile = await createUserProfile(result.user);
+  const profile = await getOrCreateUserProfile(result.user);
   return { user: result.user, profile };
 }
 

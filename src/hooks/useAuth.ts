@@ -1,7 +1,24 @@
 import { useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '@/store/authStore';
-import { onAuthChange, getUserProfile } from '@/features/auth/authService';
+import { onAuthChange, getOrCreateUserProfile } from '@/features/auth/authService';
+import type { User as FirebaseUser } from 'firebase/auth';
+
+/**
+ * Resolves the best available display name from the profile and Firebase user.
+ * Priority: Firestore displayName → Firebase displayName → email prefix → fallback
+ */
+export function resolveDisplayName(
+  userProfile: { displayName?: string } | null,
+  firebaseUser: FirebaseUser | null
+): string {
+  return (
+    userProfile?.displayName ||
+    firebaseUser?.displayName ||
+    firebaseUser?.email?.split('@')[0] ||
+    'Usuario'
+  );
+}
 
 /**
  * Bootstraps the auth listener once at app root.
@@ -17,7 +34,7 @@ export function useAuthInit() {
       setFirebaseUser(firebaseUser);
 
       if (firebaseUser) {
-        const profile = await getUserProfile(firebaseUser.uid);
+        const profile = await getOrCreateUserProfile(firebaseUser);
         setUserProfile(profile);
       } else {
         setUserProfile(null);

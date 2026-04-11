@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { logout } from '@/features/auth/authService';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, resolveDisplayName } from '@/hooks/useAuth';
 
 const NAV_ITEMS = [
   { to: '/',             icon: LayoutDashboard, label: 'Dashboard'     },
@@ -26,12 +26,46 @@ const NAV_ITEMS = [
 
 const linkBase =
   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors';
-const linkActive = 'bg-[#3D8BFF]/15 text-[#3D8BFF]';
+const linkActive  = 'bg-[#3D8BFF]/15 text-[#3D8BFF]';
 const linkInactive = 'text-[#8899AA] hover:text-[#F0F4F8] hover:bg-white/5';
 
+// ─── User info block ──────────────────────────────────────────────────────────
+// Shared between desktop sidebar and mobile sidebar to avoid duplication.
+
+function UserInfo({
+  displayName,
+  email,
+  onLogout,
+}: {
+  displayName: string;
+  email: string;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="px-3 py-4 border-t border-white/5 space-y-1">
+      <div className="px-3 py-2">
+        <p className="text-[#F0F4F8] text-sm font-medium truncate">{displayName}</p>
+        <p className="text-[#8899AA] text-xs truncate">{email}</p>
+      </div>
+      <button
+        onClick={onLogout}
+        className={`${linkBase} ${linkInactive} w-full cursor-pointer`}
+      >
+        <LogOut size={17} />
+        Cerrar sesión
+      </button>
+    </div>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function AppLayout() {
-  const { userProfile } = useAuth();
+  const { userProfile, firebaseUser } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const displayName = resolveDisplayName(userProfile, firebaseUser);
+  const email = userProfile?.email ?? firebaseUser?.email ?? '';
 
   const handleLogout = async () => {
     await logout();
@@ -39,6 +73,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-[#0F1923] flex">
+
       {/* ── Desktop sidebar ───────────────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-56 bg-[#161F2C] border-r border-white/5 fixed inset-y-0 left-0 z-30">
         <div className="flex items-center gap-2.5 px-4 py-5 border-b border-white/5">
@@ -64,21 +99,7 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/5 space-y-1">
-          <div className="px-3 py-2">
-            <p className="text-[#F0F4F8] text-sm font-medium truncate">
-              {userProfile?.displayName ?? 'Usuario'}
-            </p>
-            <p className="text-[#8899AA] text-xs truncate">{userProfile?.email}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className={`${linkBase} ${linkInactive} w-full cursor-pointer`}
-          >
-            <LogOut size={17} />
-            Cerrar sesión
-          </button>
-        </div>
+        <UserInfo displayName={displayName} email={email} onLogout={handleLogout} />
       </aside>
 
       {/* ── Mobile sidebar overlay ────────────────────────────────────── */}
@@ -101,7 +122,10 @@ export default function AppLayout() {
             </div>
             <span className="text-[#F0F4F8] font-semibold tracking-tight">FinanceApp</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-[#8899AA] cursor-pointer">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="text-[#8899AA] cursor-pointer"
+          >
             <X size={18} />
           </button>
         </div>
@@ -123,21 +147,7 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/5 space-y-1">
-          <div className="px-3 py-2">
-            <p className="text-[#F0F4F8] text-sm font-medium truncate">
-              {userProfile?.displayName ?? 'Usuario'}
-            </p>
-            <p className="text-[#8899AA] text-xs truncate">{userProfile?.email}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className={`${linkBase} ${linkInactive} w-full cursor-pointer`}
-          >
-            <LogOut size={17} />
-            Cerrar sesión
-          </button>
-        </div>
+        <UserInfo displayName={displayName} email={email} onLogout={handleLogout} />
       </aside>
 
       {/* ── Main content ──────────────────────────────────────────────── */}
@@ -163,7 +173,7 @@ export default function AppLayout() {
         </main>
       </div>
 
-      {/* ── Mobile bottom nav (5 items max) ──────────────────────────── */}
+      {/* ── Mobile bottom nav ─────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#161F2C] border-t border-white/5 flex">
         {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
           <NavLink
@@ -181,6 +191,7 @@ export default function AppLayout() {
           </NavLink>
         ))}
       </nav>
+
     </div>
   );
 }
