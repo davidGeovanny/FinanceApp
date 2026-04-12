@@ -2,8 +2,6 @@ import {
   collection,
   doc,
   getDocs,
-  updateDoc,
-  deleteDoc,
   serverTimestamp,
   query,
   orderBy,
@@ -18,6 +16,59 @@ import type { Transaction, TransactionType } from '@/types';
 
 function txRef(uid: string) {
   return collection(db, 'users', uid, 'transactions');
+}
+
+function accountRef(uid: string, accountId: string) {
+  return doc(db, 'users', uid, 'accounts', accountId);
+}
+
+// ─── Balance helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the balance delta that a transaction applies to its origin account.
+ * Ingreso → +monto, Gasto → -monto, Transferencia → -monto (origin side).
+ */
+function originDelta(tipo: TransactionType, monto: number): number {
+  if (tipo === 'ingreso') return monto;
+  return -monto; // gasto or transferencia origin
+}
+
+/**
+ * Applies balance changes for a transaction inside an existing WriteBatch.
+ * Pass a negative multiplier (-1) to reverse the effect (used on delete/update).
+ */
+async function applyBalanceChanges(
+  uid: string,
+  batch: ReturnType<typeof writeBatch>,
+  tipo: TransactionType,
+  monto: number,
+  cuentaId: string,
+  cuentaDestinoId: string | undefined,
+  multiplier: 1 | -1
+): Promise<void> {
+  const originRef = accountRef(uid, cuentaId);
+  const originSnap = await getDoc(originRef);
+
+  if (originSnap.exists()) {
+    const currentOrigin = originSnap.data().saldo_inicial as number;
+    batch.update(originRef, {
+      saldo_inicial: currentOrigin + originDelta(tipo, monto) * multiplier,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  // Transferencia: also update destination account
+  if (tipo === 'transferencia' && cuentaDestinoId) {
+    const destRef = accountRef(uid, cuentaDestinoId);
+    const destSnap = await getDoc(destRef);
+    if (destSnap.exists()) {
+      const currentDest = destSnap.data().saldo_inicial as number;
+      batch.update(destRef, {
+        saldo_inicial: currentDest + monto * multiplier,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
@@ -36,21 +87,11 @@ export async function getTransactions(
 ): Promise<Transaction[]> {
   const constraints: QueryConstraint[] = [orderBy('fecha', 'desc')];
 
-  if (filters?.tipo) {
-    constraints.push(where('tipo', '==', filters.tipo));
-  }
-  if (filters?.cuentaId) {
-    constraints.push(where('cuentaId', '==', filters.cuentaId));
-  }
-  if (filters?.categoriaId) {
-    constraints.push(where('categoriaId', '==', filters.categoriaId));
-  }
-  if (filters?.desde) {
-    constraints.push(where('fecha', '>=', Timestamp.fromDate(filters.desde)));
-  }
-  if (filters?.hasta) {
-    constraints.push(where('fecha', '<=', Timestamp.fromDate(filters.hasta)));
-  }
+  if (filters?.tipo)        constraints.push(where('tipo',        '==', filters.tipo));
+  if (filters?.cuentaId)    constraints.push(where('cuentaId',    '==', filters.cuentaId));
+  if (filters?.categoriaId) constraints.push(where('categoriaId', '==', filters.categoriaId));
+  if (filters?.desde)       constraints.push(where('fecha', '>=', Timestamp.fromDate(filters.desde)));
+  if (filters?.hasta)       constraints.push(where('fecha', '<=', Timestamp.fromDate(filters.hasta)));
 
   const q = query(txRef(uid), ...constraints);
   const snap = await getDocs(q);
@@ -74,33 +115,9 @@ export async function createTransaction(
     updatedAt: serverTimestamp(),
   });
 
-  const accountRef = doc(db, 'users', uid, 'accounts', data.cuentaId);
-  const accountSnap = await getDoc(accountRef);
-
-  if (accountSnap.exists()) {
-    const current = accountSnap.data().saldo_inicial as number;
-
-    if (data.tipo === 'transferencia' && data.cuentaDestinoId) {
-      batch.update(accountRef, {
-        saldo_inicial: current - data.monto,
-        updatedAt: serverTimestamp(),
-      });
-      const destRef = doc(db, 'users', uid, 'accounts', data.cuentaDestinoId);
-      const destSnap = await getDoc(destRef);
-      if (destSnap.exists()) {
-        batch.update(destRef, {
-          saldo_inicial: (destSnap.data().saldo_inicial as number) + data.monto,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } else {
-      const delta = data.tipo === 'ingreso' ? data.monto : -data.monto;
-      batch.update(accountRef, {
-        saldo_inicial: current + delta,
-        updatedAt: serverTimestamp(),
-      });
-    }
-  }
+  await applyBalanceChanges(
+    uid, batch, data.tipo, data.monto, data.cuentaId, data.cuentaDestinoId, 1
+  );
 
   await batch.commit();
 
@@ -114,18 +131,61 @@ export async function createTransaction(
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
+/**
+ * Updates a transaction and recalculates account balances:
+ * 1. Reverses the old transaction's balance effect.
+ * 2. Applies the new transaction's balance effect.
+ * Both steps happen in a single batch — atomic.
+ */
 export async function updateTransaction(
   uid: string,
   txId: string,
   data: Partial<TransactionInput>
 ): Promise<void> {
   const ref = doc(db, 'users', uid, 'transactions', txId);
-  await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+  const oldSnap = await getDoc(ref);
+
+  if (!oldSnap.exists()) return;
+
+  const old = oldSnap.data() as Transaction;
+  const batch = writeBatch(db);
+
+  // 1 — reverse old effect
+  await applyBalanceChanges(
+    uid, batch, old.tipo, old.monto, old.cuentaId, old.cuentaDestinoId, -1
+  );
+
+  // 2 — apply new effect (merge old fields with updated ones)
+  const next = { ...old, ...data };
+  await applyBalanceChanges(
+    uid, batch, next.tipo, next.monto, next.cuentaId, next.cuentaDestinoId, 1
+  );
+
+  batch.update(ref, { ...data, updatedAt: serverTimestamp() });
+
+  await batch.commit();
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
+/**
+ * Deletes a transaction and reverses its balance effect on the affected accounts.
+ */
 export async function deleteTransaction(uid: string, txId: string): Promise<void> {
   const ref = doc(db, 'users', uid, 'transactions', txId);
-  await deleteDoc(ref);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) return;
+
+  const tx = snap.data() as Transaction;
+  const batch = writeBatch(db);
+
+  // Reverse the balance effect before deleting
+  await applyBalanceChanges(
+    uid, batch, tx.tipo, tx.monto, tx.cuentaId, tx.cuentaDestinoId, -1
+  );
+
+  batch.delete(ref);
+
+  await batch.commit();
 }

@@ -122,13 +122,13 @@ export function TransactionForm({ initial, onSuccess, onCancel }: TransactionFor
       moneda: currency,
       categoriaId: data.categoriaId ?? '',
       cuentaId: data.cuentaId,
-      cuentaDestinoId: data.cuentaDestinoId || undefined,
       fecha,
       notas: data.notas ?? '',
       etiquetas: data.etiquetas,
-      monedaOrigen: data.monedaOrigen || undefined,
-      montoOrigen: data.montoOrigen ? parseFloat(data.montoOrigen) : undefined,
-      tipoCambio,
+      ...(data.cuentaDestinoId ? { cuentaDestinoId: data.cuentaDestinoId } : {}),
+      ...(data.monedaOrigen ? { monedaOrigen: data.monedaOrigen } : {}),
+      ...(data.montoOrigen ? { montoOrigen: parseFloat(data.montoOrigen) } : {}),
+      ...(tipoCambio !== undefined ? { tipoCambio } : {}),
     };
 
     if (initial) {
