@@ -112,6 +112,15 @@ export interface Saving {
   updatedAt: Timestamp;
 }
 
+// ─── Investment Type (user-managed catalog) ───────────────────────────────────
+
+export interface InvestmentType {
+  id: string;
+  nombre: string;
+  icono: string;
+  createdAt: Timestamp;
+}
+
 // ─── Investment ──────────────────────────────────────────────────────────────
 
 export type InvestmentLiquidity = 'a_la_vista' | 'congelada';
@@ -124,7 +133,7 @@ export interface Valuation {
 export interface Investment {
   id: string;
   nombre: string;
-  tipo: string;
+  tipoId: string;           // references InvestmentType.id
   montoInvertido: number;
   liquidez: InvestmentLiquidity;
   valuaciones: Valuation[];

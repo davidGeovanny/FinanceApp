@@ -3,10 +3,11 @@ import { X, Save, AlertTriangle } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { calcMetrics } from './investmentService';
 import { useAddValuation } from './useInvestments';
-import type { Investment } from '@/types';
+import type { Investment, InvestmentType } from '@/types';
 
 interface BulkValuationModalProps {
   investments: Investment[];
+  investmentTypes: InvestmentType[];
   onClose: () => void;
 }
 
@@ -20,11 +21,10 @@ function daysSince(investment: Investment): number {
   const sorted = [...investment.valuaciones].sort(
     (a, b) => b.fecha.toMillis() - a.fecha.toMillis()
   );
-  const ms = Date.now() - sorted[0].fecha.toMillis();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
+  return Math.floor((Date.now() - sorted[0].fecha.toMillis()) / (1000 * 60 * 60 * 24));
 }
 
-export function BulkValuationModal({ investments, onClose }: BulkValuationModalProps) {
+export function BulkValuationModal({ investments, investmentTypes, onClose }: BulkValuationModalProps) {
   const addValuation = useAddValuation();
 
   const initialRows = useMemo(() => {
@@ -75,10 +75,8 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      style: 'currency', currency: 'MXN',
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
     }).format(n);
 
   return (
@@ -95,10 +93,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
               Deja vacío lo que no cambió — solo se guardan los valores distintos
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-[#8899AA] hover:text-[#F0F4F8] transition-colors cursor-pointer"
-          >
+          <button onClick={onClose} className="text-[#8899AA] hover:text-[#F0F4F8] transition-colors cursor-pointer">
             <X size={18} />
           </button>
         </div>
@@ -110,6 +105,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
             const days = daysSince(inv);
             const isStale = days >= 30;
             const row = rows[inv.id];
+            const tipoInfo = investmentTypes.find((t) => t.id === inv.tipoId);
 
             return (
               <div
@@ -123,9 +119,7 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-sm text-[#F0F4F8] font-medium truncate">
-                      {inv.nombre}
-                    </p>
+                    <p className="text-sm text-[#F0F4F8] font-medium truncate">{inv.nombre}</p>
                     {isStale && (
                       <span title={`Sin actualizar hace ${days} días`} className="flex-shrink-0">
                         <AlertTriangle size={12} className="text-[#F5A623]" />
@@ -133,7 +127,9 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-[#8899AA]">{inv.tipo}</span>
+                    <span className="text-xs text-[#8899AA]">
+                      {tipoInfo ? `${tipoInfo.icono} ${tipoInfo.nombre}` : '—'}
+                    </span>
                     <span className="text-xs text-[#8899AA]">·</span>
                     <span
                       className={`text-xs font-medium px-1.5 py-0.5 rounded-md ${
@@ -201,7 +197,6 @@ export function BulkValuationModal({ investments, onClose }: BulkValuationModalP
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

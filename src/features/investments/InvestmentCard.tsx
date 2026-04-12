@@ -3,10 +3,11 @@ import { Pencil, Trash2, TrendingUp, TrendingDown, Lock, Unlock, Clock, AlertTri
 import { useDeleteInvestment } from './useInvestments';
 import { calcMetrics } from './investmentService';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { Investment } from '@/types';
+import type { Investment, InvestmentType } from '@/types';
 
 interface InvestmentCardProps {
   investment: Investment;
+  investmentTypes: InvestmentType[];
   onEdit: (investment: Investment) => void;
 }
 
@@ -15,11 +16,10 @@ function daysSince(investment: Investment): number {
   const sorted = [...investment.valuaciones].sort(
     (a, b) => b.fecha.toMillis() - a.fecha.toMillis()
   );
-  const ms = Date.now() - sorted[0].fecha.toMillis();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
+  return Math.floor((Date.now() - sorted[0].fecha.toMillis()) / (1000 * 60 * 60 * 24));
 }
 
-export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
+export function InvestmentCard({ investment, investmentTypes, onEdit }: InvestmentCardProps) {
   const [confirming, setConfirming] = useState(false);
   const deleteInvestment = useDeleteInvestment();
 
@@ -28,16 +28,18 @@ export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
   const days = daysSince(investment);
   const isStale = days >= 30;
 
+  // Resolve type name and icon from catalog
+  const tipoInfo = investmentTypes.find((t) => t.id === investment.tipoId);
+  const tipoLabel = tipoInfo ? `${tipoInfo.icono} ${tipoInfo.nombre}` : '—';
+
   const liquidezColor = isCongelada ? '#64748B' : '#22D3EE';
   const gainColor = metrics.gananciaTotal >= 0 ? '#1DB87A' : '#FF5B5B';
   const GainIcon = metrics.gananciaTotal >= 0 ? TrendingUp : TrendingDown;
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      style: 'currency', currency: 'MXN',
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
     }).format(n);
 
   const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
@@ -67,7 +69,8 @@ export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-[#8899AA]">{investment.tipo}</span>
+              <span className="text-xs text-[#8899AA]">{tipoLabel}</span>
+              <span className="text-xs text-[#8899AA]">·</span>
               <span
                 className="text-xs px-1.5 py-0.5 rounded-full"
                 style={{ backgroundColor: `${liquidezColor}20`, color: liquidezColor }}
@@ -75,11 +78,7 @@ export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
                 {isCongelada ? 'Congelada' : 'A la vista'}
               </span>
               {days !== Infinity && (
-                <span
-                  className={`flex items-center gap-0.5 text-xs ${
-                    isStale ? 'text-[#F5A623]' : 'text-[#8899AA]'
-                  }`}
-                >
+                <span className={`flex items-center gap-0.5 text-xs ${isStale ? 'text-[#F5A623]' : 'text-[#8899AA]'}`}>
                   <Clock size={10} />
                   {days === 0 ? 'hoy' : `hace ${days}d`}
                 </span>
@@ -87,12 +86,10 @@ export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
             </div>
           </div>
 
-          {/* Actions — edit only, no inline valuation */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => onEdit(investment)}
               className="p-1.5 rounded-lg text-[#8899AA] hover:text-[#3D8BFF] hover:bg-[#3D8BFF]/10 transition-colors cursor-pointer"
-              title="Editar datos"
             >
               <Pencil size={13} />
             </button>
@@ -136,7 +133,6 @@ export function InvestmentCard({ investment, onEdit }: InvestmentCardProps) {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="text-xs text-[#8899AA] tabular-nums">
           Invertido: {fmt(investment.montoInvertido)}
           {investment.valuaciones.length > 0 && (

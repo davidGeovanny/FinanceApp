@@ -13,12 +13,11 @@ import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { User } from '@/types';
 import { seedSystemCategories } from '@/features/categories/categoryService';
+import { seedInvestmentTypes } from '@/features/investments/investmentTypeService';
 
 const googleProvider = new GoogleAuthProvider();
 
 // ─── Get or create user profile ──────────────────────────────────────────────
-// Single function used both at registration and on every auth state change.
-// Ensures the profile always exists in Firestore regardless of auth method.
 
 export async function getOrCreateUserProfile(firebaseUser: FirebaseUser): Promise<User> {
   const ref = doc(db, 'users', firebaseUser.uid);
@@ -34,6 +33,7 @@ export async function getOrCreateUserProfile(firebaseUser: FirebaseUser): Promis
     };
     await setDoc(ref, profile);
     await seedSystemCategories(firebaseUser.uid);
+    await seedInvestmentTypes(firebaseUser.uid);
     return { uid: firebaseUser.uid, ...profile };
   }
 

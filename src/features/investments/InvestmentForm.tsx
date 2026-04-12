@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ChevronDown, Lock } from 'lucide-react';
+import { ChevronDown, Lock, Plus, Check, X } from 'lucide-react';
 import { useCreateInvestment, useUpdateInvestment } from './useInvestments';
+import { useInvestmentTypes, useCreateInvestmentType } from './useInvestmentTypes';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import type { Investment } from '@/types';
 
@@ -10,7 +12,7 @@ import type { Investment } from '@/types';
 
 const investmentSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido').max(50),
-  tipo: z.string().min(1, 'El tipo es requerido'),
+  tipoId: z.string().min(1, 'Selecciona el tipo'),
   montoInvertido: z
     .string()
     .min(1, 'Ingresa el monto')
@@ -21,9 +23,9 @@ const investmentSchema = z.object({
 
 type InvestmentFormData = z.infer<typeof investmentSchema>;
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Emoji options for new type ───────────────────────────────────────────────
 
-const INSTRUMENT_TYPES = ['CETES', 'Finsus', 'SuperTasas', 'NU', 'Mercado Pago'];
+const EMOJI_OPTIONS = ['📊','💹','🏛️','🟣','💙','🟢','🔵','🟡','💰','📈','🏦','💎'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -36,41 +38,57 @@ interface InvestmentFormProps {
 export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormProps) {
   const createInvestment = useCreateInvestment();
   const updateInvestment = useUpdateInvestment();
+  const { data: investmentTypes = [] } = useInvestmentTypes();
+  const createType = useCreateInvestmentType();
 
-  // Lock monto once any valuation exists — the seed valuation is created on first
-  // save, so from the second open onward the field is read-only. Use
-  // "Actualizar valuaciones" to record the current value going forward.
+  // Inline "add new type" state
+  const [addingType, setAddingType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeIcon, setNewTypeIcon] = useState('📊');
+
   const amountLocked = !!initial && initial.valuaciones.length >= 1;
 
   const {
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<InvestmentFormData>({
     resolver: zodResolver(investmentSchema),
     defaultValues: initial
       ? {
           nombre: initial.nombre,
-          tipo: initial.tipo,
+          tipoId: initial.tipoId,
           montoInvertido: String(initial.montoInvertido),
           liquidez: initial.liquidez,
           notas: initial.notas ?? '',
         }
       : {
           nombre: '',
-          tipo: '',
+          tipoId: '',
           montoInvertido: '',
           liquidez: 'a_la_vista',
           notas: '',
         },
   });
 
+  const handleAddType = async () => {
+    if (!newTypeName.trim()) return;
+    const created = await createType.mutateAsync({
+      nombre: newTypeName.trim(),
+      icono: newTypeIcon,
+    });
+    setValue('tipoId', created.id);
+    setNewTypeName('');
+    setNewTypeIcon('📊');
+    setAddingType(false);
+  };
+
   const onSubmit = async (data: InvestmentFormData) => {
     const payload: Omit<Investment, 'id' | 'createdAt' | 'updatedAt'> = {
       nombre: data.nombre,
-      tipo: data.tipo,
-      // Preserve original monto when locked — never overwrite with form value
+      tipoId: data.tipoId,
       montoInvertido: amountLocked
         ? initial!.montoInvertido
         : parseFloat(data.montoInvertido),
@@ -108,28 +126,96 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
         {errors.nombre && <p className={errorClass}>{errors.nombre.message}</p>}
       </div>
 
-      {/* Plataforma / Instrumento */}
+      {/* Tipo */}
       <div>
         <label className={labelClass}>Plataforma / Instrumento</label>
-        <div className="relative">
-          <select {...register('tipo')} className={`${inputClass} appearance-none pr-8`}>
-            <option value="">Seleccionar</option>
-            {INSTRUMENT_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-          <ChevronDown
-            size={14}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8899AA] pointer-events-none"
-          />
-        </div>
-        {errors.tipo && <p className={errorClass}>{errors.tipo.message}</p>}
+
+        {addingType ? (
+          <div className="space-y-2">
+            {/* Emoji selector */}
+            <div className="flex flex-wrap gap-1.5">
+              {EMOJI_OPTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setNewTypeIcon(emoji)}
+                  className={`w-8 h-8 rounded-lg text-base flex items-center justify-center transition-colors cursor-pointer ${
+                    newTypeIcon === emoji
+                      ? 'bg-[#3D8BFF]/20 ring-1 ring-[#3D8BFF]/50'
+                      : 'bg-[#1E2A3A] hover:bg-white/10'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            {/* Name input + confirm/cancel */}
+            <div className="flex items-center gap-2">
+              <span className="text-lg flex-shrink-0">{newTypeIcon}</span>
+              <input
+                type="text"
+                value={newTypeName}
+                onChange={(e) => setNewTypeName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddType(); } }}
+                placeholder="Nombre del tipo..."
+                autoFocus
+                className={`${inputClass} flex-1`}
+              />
+              <button
+                type="button"
+                onClick={handleAddType}
+                disabled={!newTypeName.trim() || createType.isPending}
+                className="p-2 rounded-xl bg-[#1DB87A] hover:bg-[#18a06a] text-white disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                <Check size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddingType(false); setNewTypeName(''); setNewTypeIcon('📊'); }}
+                className="p-2 rounded-xl border border-white/10 text-[#8899AA] hover:text-[#F0F4F8] transition-colors cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <select
+                {...register('tipoId')}
+                className={`${inputClass} appearance-none pr-8`}
+              >
+                <option value="">Seleccionar</option>
+                {investmentTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.icono} {t.nombre}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8899AA] pointer-events-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setAddingType(true)}
+              title="Agregar nuevo tipo"
+              className="px-3 bg-[#1E2A3A] border border-white/10 rounded-xl text-[#8899AA] hover:text-[#3D8BFF] hover:border-[#3D8BFF]/30 transition-colors cursor-pointer flex-shrink-0"
+            >
+              <Plus size={15} />
+            </button>
+          </div>
+        )}
+
+        {errors.tipoId && <p className={errorClass}>{errors.tipoId.message}</p>}
       </div>
 
       {/* Monto invertido */}
       <div>
         <label className={labelClass}>
-          <span>Monto invertido (MXN)</span>
+          Monto invertido (MXN)
           {amountLocked && (
             <span className="inline-flex items-center gap-1 ml-2 text-[#64748B]">
               <Lock size={10} />
@@ -202,7 +288,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
         <label className={labelClass}>Notas (opcional)</label>
         <textarea
           {...register('notas')}
-          placeholder="Plataforma, tasa, observaciones..."
+          placeholder="Tasa, observaciones..."
           rows={2}
           className={`${inputClass} resize-none`}
         />
