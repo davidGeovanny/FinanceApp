@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { useAuthInit } from '@/hooks/useAuth';
@@ -15,6 +15,7 @@ import SavingsPage from '@/pages/savings/SavingsPage';
 import InvestmentsPage from '@/pages/investments/InvestmentsPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
+import { HashRouter } from 'react-router-dom';
 
 function AppRoutes() {
   useAuthInit();
@@ -46,9 +47,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <HashRouter>
         <AppRoutes />
-      </BrowserRouter>
+      </HashRouter>
     </QueryClientProvider>
   );
 }
