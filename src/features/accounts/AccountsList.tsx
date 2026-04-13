@@ -34,9 +34,10 @@ export function AccountsList() {
     return acc;
   }, {});
 
-  // Total balance across MXN non-credit accounts
+  // Total balance across MXN non-credit accounts.
+  // Linked investment accounts are excluded to avoid double-counting with the Investments module.
   const totalMXN = accounts
-    .filter((a) => a.moneda === 'MXN' && a.tipo !== 'tarjeta_credito')
+    .filter((a) => a.moneda === 'MXN' && a.tipo !== 'tarjeta_credito' && !a.investmentId)
     .reduce((sum, a) => sum + a.saldo_inicial, 0);
 
   const formattedTotal = new Intl.NumberFormat('es-MX', {

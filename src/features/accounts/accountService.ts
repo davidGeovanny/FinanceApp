@@ -8,6 +8,7 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Account } from '@/types';
@@ -51,4 +52,17 @@ export async function updateAccount(
 export async function deleteAccount(uid: string, accountId: string): Promise<void> {
   const ref = doc(db, 'users', uid, 'accounts', accountId);
   await deleteDoc(ref);
+}
+
+/**
+ * Finds the virtual account linked to a given investment, if any.
+ */
+export async function getAccountByInvestmentId(
+  uid: string,
+  investmentId: string
+): Promise<Account | null> {
+  const q = query(accountsRef(uid), where('investmentId', '==', investmentId));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Account;
 }

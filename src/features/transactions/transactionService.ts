@@ -9,6 +9,7 @@ import {
   Timestamp,
   writeBatch,
   getDoc,
+  arrayUnion,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -22,20 +23,24 @@ function accountRef(uid: string, accountId: string) {
   return doc(db, 'users', uid, 'accounts', accountId);
 }
 
+function investmentRef(uid: string, investmentId: string) {
+  return doc(db, 'users', uid, 'investments', investmentId);
+}
+
 // ─── Balance helpers ──────────────────────────────────────────────────────────
 
-/**
- * Returns the balance delta that a transaction applies to its origin account.
- * Ingreso → +monto, Gasto → -monto, Transferencia → -monto (origin side).
- */
 function originDelta(tipo: TransactionType, monto: number): number {
   if (tipo === 'ingreso') return monto;
-  return -monto; // gasto or transferencia origin
+  return -monto;
 }
 
 /**
  * Applies balance changes for a transaction inside an existing WriteBatch.
- * Pass a negative multiplier (-1) to reverse the effect (used on delete/update).
+ *
+ * If an account has `investmentId`, instead of updating `saldo_inicial` directly,
+ * we append a new valuation to the linked investment (Opción A).
+ * The account's saldo_inicial is also updated so the UI stays in sync immediately
+ * (it will be overwritten next time addValuation is called, but keeps consistency).
  */
 async function applyBalanceChanges(
   uid: string,
@@ -50,11 +55,25 @@ async function applyBalanceChanges(
   const originSnap = await getDoc(originRef);
 
   if (originSnap.exists()) {
-    const currentOrigin = originSnap.data().saldo_inicial as number;
+    const originData = originSnap.data();
+    const currentOrigin = originData.saldo_inicial as number;
+    const newOriginBalance = currentOrigin + originDelta(tipo, monto) * multiplier;
+
+    // Always update saldo_inicial on the account for immediate UI consistency
     batch.update(originRef, {
-      saldo_inicial: currentOrigin + originDelta(tipo, monto) * multiplier,
+      saldo_inicial: newOriginBalance,
       updatedAt: serverTimestamp(),
     });
+
+    // If linked to an investment, also append a new valuation
+    if (originData.investmentId) {
+      const invRef = investmentRef(uid, originData.investmentId);
+      const newValuation = { fecha: Timestamp.now(), valor: newOriginBalance };
+      batch.update(invRef, {
+        valuaciones: arrayUnion(newValuation),
+        updatedAt: serverTimestamp(),
+      });
+    }
   }
 
   // Transferencia: also update destination account
@@ -62,11 +81,24 @@ async function applyBalanceChanges(
     const destRef = accountRef(uid, cuentaDestinoId);
     const destSnap = await getDoc(destRef);
     if (destSnap.exists()) {
-      const currentDest = destSnap.data().saldo_inicial as number;
+      const destData = destSnap.data();
+      const currentDest = destData.saldo_inicial as number;
+      const newDestBalance = currentDest + monto * multiplier;
+
       batch.update(destRef, {
-        saldo_inicial: currentDest + monto * multiplier,
+        saldo_inicial: newDestBalance,
         updatedAt: serverTimestamp(),
       });
+
+      // If destination is also a transaccional investment, append valuation
+      if (destData.investmentId) {
+        const invRef = investmentRef(uid, destData.investmentId);
+        const newValuation = { fecha: Timestamp.now(), valor: newDestBalance };
+        batch.update(invRef, {
+          valuaciones: arrayUnion(newValuation),
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
   }
 }
@@ -131,12 +163,6 @@ export async function createTransaction(
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-/**
- * Updates a transaction and recalculates account balances:
- * 1. Reverses the old transaction's balance effect.
- * 2. Applies the new transaction's balance effect.
- * Both steps happen in a single batch — atomic.
- */
 export async function updateTransaction(
   uid: string,
   txId: string,
@@ -155,7 +181,7 @@ export async function updateTransaction(
     uid, batch, old.tipo, old.monto, old.cuentaId, old.cuentaDestinoId, -1
   );
 
-  // 2 — apply new effect (merge old fields with updated ones)
+  // 2 — apply new effect
   const next = { ...old, ...data };
   await applyBalanceChanges(
     uid, batch, next.tipo, next.monto, next.cuentaId, next.cuentaDestinoId, 1
@@ -168,9 +194,6 @@ export async function updateTransaction(
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-/**
- * Deletes a transaction and reverses its balance effect on the affected accounts.
- */
 export async function deleteTransaction(uid: string, txId: string): Promise<void> {
   const ref = doc(db, 'users', uid, 'transactions', txId);
   const snap = await getDoc(ref);
@@ -180,7 +203,6 @@ export async function deleteTransaction(uid: string, txId: string): Promise<void
   const tx = snap.data() as Transaction;
   const batch = writeBatch(db);
 
-  // Reverse the balance effect before deleting
   await applyBalanceChanges(
     uid, batch, tx.tipo, tx.monto, tx.cuentaId, tx.cuentaDestinoId, -1
   );

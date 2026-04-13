@@ -28,6 +28,7 @@ export function useCreateAccount() {
       createAccount(firebaseUser!.uid, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts', firebaseUser?.uid] });
+      qc.invalidateQueries({ queryKey: ['investments', firebaseUser?.uid] });
     },
   });
 }
@@ -46,6 +47,7 @@ export function useUpdateAccount() {
     }) => updateAccount(firebaseUser!.uid, accountId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts', firebaseUser?.uid] });
+      qc.invalidateQueries({ queryKey: ['investments', firebaseUser?.uid] });
     },
   });
 }
@@ -58,6 +60,7 @@ export function useDeleteAccount() {
     mutationFn: (accountId: string) => deleteAccount(firebaseUser!.uid, accountId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts', firebaseUser?.uid] });
+      qc.invalidateQueries({ queryKey: ['investments', firebaseUser?.uid] });
     },
   });
 }

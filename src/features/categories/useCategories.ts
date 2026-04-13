@@ -16,6 +16,9 @@ export function useCategories() {
     queryKey: ['categories', uid],
     queryFn: () => getCategories(uid),
     enabled: !!uid,
+    // Categories are a rarely-changing catalog — no need to refetch aggressively
+    staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
   });
 }
 

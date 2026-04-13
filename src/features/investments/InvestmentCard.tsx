@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, TrendingUp, TrendingDown, Lock, Unlock, Clock, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, TrendingUp, TrendingDown, Lock, Unlock, Clock, AlertTriangle, Wallet } from 'lucide-react';
 import { useDeleteInvestment } from './useInvestments';
 import { calcMetrics } from './investmentService';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -62,6 +62,12 @@ export function InvestmentCard({ investment, investmentTypes, onEdit }: Investme
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-semibold text-[#F0F4F8] truncate">{investment.nombre}</p>
+              {investment.esTransaccional && (
+                <span className="flex items-center gap-0.5 bg-[#A78BFA]/15 text-[#A78BFA] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  <Wallet size={9} />
+                  Cuenta
+                </span>
+              )}
               {isStale && (
                 <span title={`Sin actualizar hace ${days} días`} className="flex-shrink-0">
                   <AlertTriangle size={13} className="text-[#F5A623]" />

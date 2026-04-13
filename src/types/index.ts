@@ -26,6 +26,7 @@ export interface Account {
   tipo: AccountType;
   saldo_inicial: number;
   moneda: string;
+  investmentId?: string;   // si está presente, la cuenta está vinculada a una inversión transaccional
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -138,6 +139,8 @@ export interface Investment {
   liquidez: InvestmentLiquidity;
   valuaciones: Valuation[];
   notas?: string;
+  esTransaccional: boolean; // si true, aparece como cuenta operable en transacciones
+  moneda: string;           // moneda de la cuenta (solo relevante si esTransaccional)
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

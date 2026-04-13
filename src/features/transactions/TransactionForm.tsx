@@ -213,7 +213,7 @@ export function TransactionForm({ initial, onSuccess, onCancel }: TransactionFor
             <option value="">Seleccionar cuenta</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.nombre} ({a.moneda})
+                {a.nombre} ({a.moneda}){a.investmentId ? ' 📈' : ''}
               </option>
             ))}
           </select>

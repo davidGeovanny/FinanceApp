@@ -8,8 +8,11 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  where,
   arrayUnion,
   Timestamp,
+  writeBatch,
+  getDoc,
   type QueryConstraint,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -19,11 +22,23 @@ function investmentsRef(uid: string) {
   return collection(db, 'users', uid, 'investments');
 }
 
+function accountsRef(uid: string) {
+  return collection(db, 'users', uid, 'accounts');
+}
+
 export async function getInvestments(uid: string): Promise<Investment[]> {
   const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
   const q = query(investmentsRef(uid), ...constraints);
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Investment);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      esTransaccional: false,
+      moneda: 'MXN',
+      ...data,
+    } as Investment;
+  });
 }
 
 export type InvestmentInput = Omit<Investment, 'id' | 'createdAt' | 'updatedAt'>;
@@ -41,6 +56,8 @@ export async function createInvestment(
   const ref = await addDoc(investmentsRef(uid), {
     ...data,
     valuaciones,
+    esTransaccional: data.esTransaccional ?? false,
+    moneda: data.moneda ?? 'MXN',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -68,19 +85,43 @@ export async function deleteInvestment(uid: string, investmentId: string): Promi
   await deleteDoc(ref);
 }
 
-// ─── Add valuation (appends to array, never overwrites) ───────────────────────
+// ─── Add valuation ────────────────────────────────────────────────────────────
+// If the investment is transaccional, also updates saldo_inicial on the linked
+// virtual account (matched by investmentId field on the account document).
 
 export async function addValuation(
   uid: string,
   investmentId: string,
   valor: number
 ): Promise<void> {
-  const ref = doc(db, 'users', uid, 'investments', investmentId);
+  const invRef = doc(db, 'users', uid, 'investments', investmentId);
   const newValuation: Valuation = { fecha: Timestamp.now(), valor };
-  await updateDoc(ref, {
+
+  const batch = writeBatch(db);
+
+  batch.update(invRef, {
     valuaciones: arrayUnion(newValuation),
     updatedAt: serverTimestamp(),
   });
+
+  // Sync virtual account balance if investment is transaccional
+  const invSnap = await getDoc(invRef);
+  if (invSnap.exists()) {
+    const inv = invSnap.data() as Investment;
+    if (inv.esTransaccional) {
+      // Find the account linked to this investment
+      const q = query(accountsRef(uid), where('investmentId', '==', investmentId));
+      const accountsSnap = await getDocs(q);
+      accountsSnap.forEach((accountDoc) => {
+        batch.update(accountDoc.ref, {
+          saldo_inicial: valor,
+          updatedAt: serverTimestamp(),
+        });
+      });
+    }
+  }
+
+  await batch.commit();
 }
 
 // ─── Computed metrics ─────────────────────────────────────────────────────────

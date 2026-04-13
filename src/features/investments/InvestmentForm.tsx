@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ChevronDown, Lock, Plus, Check, X } from 'lucide-react';
+import { ChevronDown, Lock, Plus, Check, X, Wallet } from 'lucide-react';
 import { useCreateInvestment, useUpdateInvestment } from './useInvestments';
 import { useInvestmentTypes, useCreateInvestmentType } from './useInvestmentTypes';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
+import { createAccount, getAccountByInvestmentId, updateAccount } from '@/features/accounts/accountService';
+import { useAuth } from '@/hooks/useAuth';
 import type { Investment } from '@/types';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -19,6 +21,8 @@ const investmentSchema = z.object({
     .refine((v) => parseFloat(v) >= 0, 'Debe ser mayor o igual a 0'),
   liquidez: z.enum(['a_la_vista', 'congelada']),
   notas: z.string().optional(),
+  esTransaccional: z.boolean(),
+  moneda: z.string().min(1, 'Selecciona una moneda'),
 });
 
 type InvestmentFormData = z.infer<typeof investmentSchema>;
@@ -26,6 +30,7 @@ type InvestmentFormData = z.infer<typeof investmentSchema>;
 // ─── Emoji options for new type ───────────────────────────────────────────────
 
 const EMOJI_OPTIONS = ['📊','💹','🏛️','🟣','💙','🟢','🔵','🟡','💰','📈','🏦','💎'];
+const CURRENCIES = ['MXN', 'USD', 'EUR', 'CAD', 'GBP'];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -36,12 +41,12 @@ interface InvestmentFormProps {
 }
 
 export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormProps) {
+  const { firebaseUser } = useAuth();
   const createInvestment = useCreateInvestment();
   const updateInvestment = useUpdateInvestment();
   const { data: investmentTypes = [] } = useInvestmentTypes();
   const createType = useCreateInvestmentType();
 
-  // Inline "add new type" state
   const [addingType, setAddingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypeIcon, setNewTypeIcon] = useState('📊');
@@ -53,6 +58,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
     control,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<InvestmentFormData>({
     resolver: zodResolver(investmentSchema),
@@ -63,6 +69,8 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
           montoInvertido: String(initial.montoInvertido),
           liquidez: initial.liquidez,
           notas: initial.notas ?? '',
+          esTransaccional: initial.esTransaccional ?? false,
+          moneda: initial.moneda ?? 'MXN',
         }
       : {
           nombre: '',
@@ -70,8 +78,13 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
           montoInvertido: '',
           liquidez: 'a_la_vista',
           notas: '',
+          esTransaccional: false,
+          moneda: 'MXN',
         },
   });
+
+  const esTransaccional = watch('esTransaccional');
+  const moneda = watch('moneda');
 
   const handleAddType = async () => {
     if (!newTypeName.trim()) return;
@@ -86,6 +99,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
   };
 
   const onSubmit = async (data: InvestmentFormData) => {
+    const uid = firebaseUser!.uid;
     const payload: Omit<Investment, 'id' | 'createdAt' | 'updatedAt'> = {
       nombre: data.nombre,
       tipoId: data.tipoId,
@@ -95,12 +109,49 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
       liquidez: data.liquidez,
       notas: data.notas ?? '',
       valuaciones: initial?.valuaciones ?? [],
+      esTransaccional: data.esTransaccional,
+      moneda: data.moneda,
     };
 
     if (initial) {
       await updateInvestment.mutateAsync({ investmentId: initial.id, data: payload });
+
+      // If toggling esTransaccional on, create the virtual account
+      if (data.esTransaccional && !initial.esTransaccional) {
+        const existing = await getAccountByInvestmentId(uid, initial.id);
+        if (!existing) {
+          const valorActual = initial.valuaciones.length > 0
+            ? [...initial.valuaciones].sort((a, b) => b.fecha.toMillis() - a.fecha.toMillis())[0].valor
+            : initial.montoInvertido;
+          await createAccount(uid, {
+            nombre: data.nombre,
+            tipo: 'inversion_vista',
+            saldo_inicial: valorActual,
+            moneda: data.moneda,
+            investmentId: initial.id,
+          });
+        } else {
+          // Update moneda in case it changed
+          await updateAccount(uid, existing.id, { moneda: data.moneda });
+        }
+      }
+
+      // If toggling esTransaccional off, just leave the account — no auto-delete
+      // (user might want to keep history; they can delete manually)
+
     } else {
-      await createInvestment.mutateAsync(payload);
+      const created = await createInvestment.mutateAsync(payload);
+
+      // Create virtual account for transaccional investments
+      if (data.esTransaccional) {
+        await createAccount(uid, {
+          nombre: data.nombre,
+          tipo: 'inversion_vista',
+          saldo_inicial: parseFloat(data.montoInvertido),
+          moneda: data.moneda,
+          investmentId: created.id,
+        });
+      }
     }
 
     onSuccess?.();
@@ -120,7 +171,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
         <input
           {...register('nombre')}
           type="text"
-          placeholder="Ej. CETES 28d, Nu Cajitas, Finsus..."
+          placeholder="Ej. CETES 28d, Nu Cajitas, Mercado Pago..."
           className={inputClass}
         />
         {errors.nombre && <p className={errorClass}>{errors.nombre.message}</p>}
@@ -132,7 +183,6 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
 
         {addingType ? (
           <div className="space-y-2">
-            {/* Emoji selector */}
             <div className="flex flex-wrap gap-1.5">
               {EMOJI_OPTIONS.map((emoji) => (
                 <button
@@ -150,7 +200,6 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
               ))}
             </div>
 
-            {/* Name input + confirm/cancel */}
             <div className="flex items-center gap-2">
               <span className="text-lg flex-shrink-0">{newTypeIcon}</span>
               <input
@@ -215,7 +264,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
       {/* Monto invertido */}
       <div>
         <label className={labelClass}>
-          Monto invertido (MXN)
+          Monto invertido
           {amountLocked && (
             <span className="inline-flex items-center gap-1 ml-2 text-[#64748B]">
               <Lock size={10} />
@@ -230,7 +279,7 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
             <CurrencyInput
               value={field.value}
               onChange={field.onChange}
-              currency="MXN"
+              currency={moneda}
               disabled={amountLocked}
               hasError={!!errors.montoInvertido && !amountLocked}
             />
@@ -281,6 +330,76 @@ export function InvestmentForm({ initial, onSuccess, onCancel }: InvestmentFormP
             </div>
           )}
         />
+      </div>
+
+      {/* ── Cuenta transaccional ────────────────────────────── */}
+      <div className="bg-[#1E2A3A] rounded-xl p-3 space-y-3">
+        <Controller
+          control={control}
+          name="esTransaccional"
+          render={({ field }) => (
+            <button
+              type="button"
+              onClick={() => field.onChange(!field.value)}
+              className="w-full flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                    field.value ? 'bg-[#A78BFA]/20' : 'bg-white/5'
+                  }`}
+                >
+                  <Wallet size={15} className={field.value ? 'text-[#A78BFA]' : 'text-[#8899AA]'} />
+                </div>
+                <div className="text-left">
+                  <p className={`text-sm font-medium ${field.value ? 'text-[#F0F4F8]' : 'text-[#8899AA]'}`}>
+                    Usar como cuenta
+                  </p>
+                  <p className="text-xs text-[#8899AA]">
+                    Permite registrar transacciones directamente
+                  </p>
+                </div>
+              </div>
+              {/* Toggle visual */}
+              <div
+                className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
+                  field.value ? 'bg-[#A78BFA]' : 'bg-white/10'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                    field.value ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </div>
+            </button>
+          )}
+        />
+
+        {/* Moneda — solo visible si esTransaccional */}
+        {esTransaccional && (
+          <div>
+            <label className={labelClass}>Moneda de la cuenta</label>
+            <div className="relative">
+              <select
+                {...register('moneda')}
+                className={`${inputClass} appearance-none pr-8`}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8899AA] pointer-events-none"
+              />
+            </div>
+            {errors.moneda && <p className={errorClass}>{errors.moneda.message}</p>}
+            <p className="text-xs text-[#8899AA] mt-1.5 ml-1">
+              Esta inversión aparecerá en Cuentas y podrás seleccionarla en transacciones.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Notas */}

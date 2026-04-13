@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Link } from 'lucide-react';
 import type { Account } from '@/types';
 import { useDeleteAccount } from './useAccounts';
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_COLORS } from './accountConstants';
@@ -15,6 +15,7 @@ export function AccountCard({ account, onEdit }: AccountCardProps) {
   const deleteAccount = useDeleteAccount();
 
   const color = ACCOUNT_TYPE_COLORS[account.tipo];
+  const isLinked = !!account.investmentId;
 
   const formatted = new Intl.NumberFormat('es-MX', {
     minimumFractionDigits: 2,
@@ -34,7 +35,18 @@ export function AccountCard({ account, onEdit }: AccountCardProps) {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-[#F0F4F8] font-medium truncate">{account.nombre}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm text-[#F0F4F8] font-medium truncate">{account.nombre}</p>
+            {isLinked && (
+              <span
+                title="Vinculada a una inversión"
+                className="flex items-center gap-0.5 bg-[#A78BFA]/15 text-[#A78BFA] text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+              >
+                <Link size={9} />
+                Inversión
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[#8899AA]">{ACCOUNT_TYPE_LABELS[account.tipo]}</p>
         </div>
 
@@ -48,20 +60,28 @@ export function AccountCard({ account, onEdit }: AccountCardProps) {
           </p>
         </div>
 
-        {/* Actions */}
+        {/* Actions — linked accounts can only be edited from Investments */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
-          <button
-            onClick={() => onEdit(account)}
-            className="p-1.5 rounded-lg text-[#8899AA] hover:text-[#3D8BFF] hover:bg-[#3D8BFF]/10 transition-colors cursor-pointer"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={() => setConfirming(true)}
-            className="p-1.5 rounded-lg text-[#8899AA] hover:text-[#FF5B5B] hover:bg-[#FF5B5B]/10 transition-colors cursor-pointer"
-          >
-            <Trash2 size={13} />
-          </button>
+          {isLinked ? (
+            <span className="text-[10px] text-[#8899AA] px-1">
+              Editar en Inversiones
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={() => onEdit(account)}
+                className="p-1.5 rounded-lg text-[#8899AA] hover:text-[#3D8BFF] hover:bg-[#3D8BFF]/10 transition-colors cursor-pointer"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={() => setConfirming(true)}
+                className="p-1.5 rounded-lg text-[#8899AA] hover:text-[#FF5B5B] hover:bg-[#FF5B5B]/10 transition-colors cursor-pointer"
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
         </div>
       </div>
 

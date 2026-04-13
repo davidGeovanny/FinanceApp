@@ -27,7 +27,10 @@ export function useCreateInvestment() {
 
   return useMutation({
     mutationFn: (data: InvestmentInput) => createInvestment(uid, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['investments', uid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['investments', uid] });
+      qc.invalidateQueries({ queryKey: ['accounts', uid] });
+    },
   });
 }
 
@@ -44,7 +47,10 @@ export function useUpdateInvestment() {
       investmentId: string;
       data: Partial<InvestmentInput>;
     }) => updateInvestment(uid, investmentId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['investments', uid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['investments', uid] });
+      qc.invalidateQueries({ queryKey: ['accounts', uid] });
+    },
   });
 }
 
@@ -55,7 +61,10 @@ export function useDeleteInvestment() {
 
   return useMutation({
     mutationFn: (investmentId: string) => deleteInvestment(uid, investmentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['investments', uid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['investments', uid] });
+      qc.invalidateQueries({ queryKey: ['accounts', uid] });
+    },
   });
 }
 
@@ -67,6 +76,9 @@ export function useAddValuation() {
   return useMutation({
     mutationFn: ({ investmentId, valor }: { investmentId: string; valor: number }) =>
       addValuation(uid, investmentId, valor),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['investments', uid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['investments', uid] });
+      qc.invalidateQueries({ queryKey: ['accounts', uid] });
+    },
   });
 }
