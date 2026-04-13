@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -11,26 +11,47 @@ import {
   LogOut,
   Menu,
   X,
+  ChevronDown,
+  Wallet,
+  Tag,
 } from 'lucide-react';
 import { logout } from '@/features/auth/authService';
 import { useAuth, resolveDisplayName } from '@/hooks/useAuth';
 
-const NAV_ITEMS = [
+// ─── Nav structure ────────────────────────────────────────────────────────────
+
+const MAIN_NAV = [
   { to: '/',             icon: LayoutDashboard, label: 'Dashboard'     },
   { to: '/transactions', icon: ArrowLeftRight,  label: 'Transacciones' },
   { to: '/savings',      icon: PiggyBank,       label: 'Ahorros'       },
   { to: '/investments',  icon: TrendingUp,      label: 'Inversiones'   },
   { to: '/reports',      icon: BarChart2,       label: 'Reportes'      },
-  { to: '/settings',     icon: Settings,        label: 'Configuración' },
 ];
+
+const SETTINGS_CHILDREN = [
+  { to: '/settings/cuentas',    icon: Wallet, label: 'Cuentas'    },
+  { to: '/settings/categorias', icon: Tag,    label: 'Categorías' },
+];
+
+// Bottom nav shows 5 items: 4 main + Settings (which covers all /settings/* routes)
+const BOTTOM_NAV = [
+  { to: '/',             icon: LayoutDashboard, label: 'Inicio'   },
+  { to: '/transactions', icon: ArrowLeftRight,  label: 'Movim.'   },
+  { to: '/savings',      icon: PiggyBank,       label: 'Ahorros'  },
+  { to: '/investments',  icon: TrendingUp,      label: 'Inversión'},
+  { to: '/settings',     icon: Settings,        label: 'Config.'  },
+];
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const linkBase =
   'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors';
-const linkActive  = 'bg-[#3D8BFF]/15 text-[#3D8BFF]';
+const linkActive   = 'bg-[#3D8BFF]/15 text-[#3D8BFF]';
 const linkInactive = 'text-[#8899AA] hover:text-[#F0F4F8] hover:bg-white/5';
+const subLinkActive   = 'text-[#3D8BFF] bg-[#3D8BFF]/10';
+const subLinkInactive = 'text-[#8899AA] hover:text-[#F0F4F8] hover:bg-white/5';
 
 // ─── User info block ──────────────────────────────────────────────────────────
-// Shared between desktop sidebar and mobile sidebar to avoid duplication.
 
 function UserInfo({
   displayName,
@@ -58,10 +79,70 @@ function UserInfo({
   );
 }
 
+// ─── Settings expandable item (desktop sidebar only) ─────────────────────────
+
+function SettingsNavItem({ onNavigate }: { onNavigate?: () => void }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isSettingsActive = location.pathname.startsWith('/settings');
+  const [open, setOpen] = useState(isSettingsActive);
+
+  const handleToggle = () => {
+    if (!isSettingsActive) {
+      // First click: navigate to /settings and expand
+      navigate('/settings');
+    }
+    setOpen((v) => !v);
+  };
+
+  return (
+    <div>
+      {/* Parent row */}
+      <button
+        onClick={handleToggle}
+        className={`${linkBase} w-full cursor-pointer justify-between ${
+          isSettingsActive ? linkActive : linkInactive
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Settings size={17} />
+          Configuración
+        </div>
+        <ChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {/* Sub-items */}
+      {open && (
+        <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
+          {SETTINGS_CHILDREN.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  isActive ? subLinkActive : subLinkInactive
+                }`
+              }
+            >
+              <Icon size={14} />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppLayout() {
   const { userProfile, firebaseUser } = useAuth();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const displayName = resolveDisplayName(userProfile, firebaseUser);
@@ -70,6 +151,11 @@ export default function AppLayout() {
   const handleLogout = async () => {
     await logout();
   };
+
+  const closeSidebar = () => setSidebarOpen(false);
+
+  // Bottom nav: /settings is active for any /settings/* route
+  const isSettingsActive = location.pathname.startsWith('/settings');
 
   return (
     <div className="min-h-screen bg-[#0F1923] flex">
@@ -84,7 +170,7 @@ export default function AppLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          {MAIN_NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
@@ -97,6 +183,8 @@ export default function AppLayout() {
               {label}
             </NavLink>
           ))}
+
+          <SettingsNavItem />
         </nav>
 
         <UserInfo displayName={displayName} email={email} onLogout={handleLogout} />
@@ -106,7 +194,7 @@ export default function AppLayout() {
       {sidebarOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
@@ -122,21 +210,18 @@ export default function AppLayout() {
             </div>
             <span className="text-[#F0F4F8] font-semibold tracking-tight">FinanceApp</span>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="text-[#8899AA] cursor-pointer"
-          >
+          <button onClick={closeSidebar} className="text-[#8899AA] cursor-pointer">
             <X size={18} />
           </button>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+          {MAIN_NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
-              onClick={() => setSidebarOpen(false)}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `${linkBase} ${isActive ? linkActive : linkInactive}`
               }
@@ -145,6 +230,8 @@ export default function AppLayout() {
               {label}
             </NavLink>
           ))}
+
+          <SettingsNavItem onNavigate={closeSidebar} />
         </nav>
 
         <UserInfo displayName={displayName} email={email} onLogout={handleLogout} />
@@ -175,21 +262,27 @@ export default function AppLayout() {
 
       {/* ── Mobile bottom nav ─────────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#161F2C] border-t border-white/5 flex">
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors ${
+        {BOTTOM_NAV.map(({ to, icon: Icon, label }) => {
+          const isActive =
+            to === '/settings'
+              ? isSettingsActive
+              : to === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(to);
+
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-xs font-medium transition-colors ${
                 isActive ? 'text-[#3D8BFF]' : 'text-[#8899AA]'
-              }`
-            }
-          >
-            <Icon size={18} />
-            <span className="text-[10px]">{label.split(' ')[0]}</span>
-          </NavLink>
-        ))}
+              }`}
+            >
+              <Icon size={18} />
+              <span className="text-[10px]">{label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
 
     </div>

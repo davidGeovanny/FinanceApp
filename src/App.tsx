@@ -15,6 +15,8 @@ import SavingsPage from '@/pages/savings/SavingsPage';
 import InvestmentsPage from '@/pages/investments/InvestmentsPage';
 import ReportsPage from '@/pages/reports/ReportsPage';
 import SettingsPage from '@/pages/settings/SettingsPage';
+import AccountsPage from '@/pages/settings/AccountsPage';
+import CategoriesPage from '@/pages/settings/CategoriesPage';
 import { HashRouter } from 'react-router-dom';
 
 function AppRoutes() {
@@ -36,6 +38,8 @@ function AppRoutes() {
           <Route path="/investments" element={<InvestmentsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/cuentas" element={<AccountsPage />} />
+          <Route path="/settings/categorias" element={<CategoriesPage />} />
         </Route>
       </Route>
 

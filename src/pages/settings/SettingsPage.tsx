@@ -1,46 +1,58 @@
-import { useState } from 'react';
-import { AccountsList } from '@/features/accounts/AccountsList';
-import { CategoriesList } from '@/features/categories/CategoriesList';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight, Wallet, Tag } from 'lucide-react';
 
-type Tab = 'cuentas' | 'categorias';
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'cuentas',    label: 'Cuentas',    icon: '🏦' },
-  { id: 'categorias', label: 'Categorías', icon: '🏷️' },
-];
+const SETTINGS_ITEMS = [
+  {
+    to: '/settings/cuentas',
+    icon: Wallet,
+    color: '#3D8BFF',
+    label: 'Cuentas',
+    description: 'Administra tus cuentas bancarias, tarjetas y efectivo',
+  },
+  {
+    to: '/settings/categorias',
+    icon: Tag,
+    color: '#1DB87A',
+    label: 'Categorías',
+    description: 'Organiza tus ingresos y gastos por categoría',
+  },
+] as const;
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>('cuentas');
+  const navigate = useNavigate();
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Page header */}
-      <div className="mb-4">
+      <div className="mb-6">
         <h1 className="text-[#F0F4F8] text-xl font-semibold">Configuración</h1>
-        <p className="text-[#8899AA] text-xs mt-0.5">Administra tus cuentas y categorías</p>
+        <p className="text-[#8899AA] text-xs mt-0.5">Personaliza tu experiencia</p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[#161F2C] border border-white/5 rounded-xl p-1 mb-5">
-        {TABS.map(({ id, label, icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
-              tab === id
-                ? 'bg-[#1E2A3A] text-[#F0F4F8]'
-                : 'text-[#8899AA] hover:text-[#F0F4F8]'
-            }`}
-          >
-            <span>{icon}</span>
-            {label}
-          </button>
+      <div className="bg-[#161F2C] border border-white/5 rounded-xl overflow-hidden">
+        {SETTINGS_ITEMS.map(({ to, icon: Icon, color, label, description }, i) => (
+          <div key={to}>
+            <button
+              onClick={() => navigate(to)}
+              className="w-full flex items-center gap-4 px-4 py-4 hover:bg-white/[0.03] transition-colors cursor-pointer text-left"
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: `${color}20` }}
+              >
+                <Icon size={17} style={{ color }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[#F0F4F8]">{label}</p>
+                <p className="text-xs text-[#8899AA] mt-0.5">{description}</p>
+              </div>
+              <ChevronRight size={16} className="text-[#8899AA] flex-shrink-0" />
+            </button>
+            {i < SETTINGS_ITEMS.length - 1 && (
+              <div className="mx-4 h-px bg-white/5" />
+            )}
+          </div>
         ))}
       </div>
-
-      {/* Content */}
-      {tab === 'cuentas' && <AccountsList />}
-      {tab === 'categorias' && <CategoriesList />}
     </div>
   );
 }
