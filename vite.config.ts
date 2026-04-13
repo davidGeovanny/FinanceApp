@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 export default defineConfig({
+  base: '/FinanceApp/',
   plugins: [
     react(),
     tailwindcss(),
@@ -18,8 +19,8 @@ export default defineConfig({
         theme_color: '#0F1923',
         background_color: '#0F1923',
         display: 'standalone',
-        scope: '/',
-        start_url: '/',
+        scope: '/FinanceApp/',
+        start_url: '/FinanceApp/',
         icons: [
           {
             src: 'web-app-manifest-192x192.png',
