@@ -48,8 +48,8 @@ export function AccountsList() {
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex items-center justify-between mb-4 min-w-0">
+        <div className="min-w-0 mr-3">
           <h2 className="text-[#F0F4F8] font-semibold">Cuentas</h2>
           {accounts.length > 0 && (
             <p className="text-xs text-[#8899AA] mt-0.5">
@@ -60,7 +60,7 @@ export function AccountsList() {
         </div>
         <button
           onClick={openAdd}
-          className="flex items-center gap-1.5 bg-[#3D8BFF]/15 hover:bg-[#3D8BFF]/25 text-[#3D8BFF] text-sm font-medium px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 bg-[#3D8BFF]/15 hover:bg-[#3D8BFF]/25 text-[#3D8BFF] text-sm font-medium px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex-shrink-0"
         >
           <Plus size={15} />
           Nueva

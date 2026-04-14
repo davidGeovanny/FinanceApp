@@ -35,6 +35,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Take control immediately when a new SW is installed,
+        // then reload all open clients so they use the fresh assets.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {

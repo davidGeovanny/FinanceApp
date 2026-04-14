@@ -6,7 +6,7 @@ export default function AccountsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto w-full overflow-hidden">
       <div className="flex items-center gap-3 mb-6">
         <button
           onClick={() => navigate('/settings')}
